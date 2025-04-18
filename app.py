@@ -22,6 +22,113 @@ load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
 groq_client = groq.Client(api_key=groq_api_key)
 
+# Set page config
+st.set_page_config(
+    page_title="AI FAQ Curator",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS
+custom_css = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary-color: #3a86ff;
+  --secondary-color: #8338ec;
+  --accent-color: #ff006e;
+  --background-color: #f8f9fa;
+  --card-bg: #ffffff;
+  --text-primary: #212529;
+  --text-secondary: #6c757d;
+  --success-color: #38b000;
+  --warning-color: #ffbe0b;
+  --error-color: #ff5a5f;
+  --border-radius: 10px;
+  --box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  --transition: all 0.3s ease;
+}
+
+.stApp {
+  font-family: 'Poppins', sans-serif !important;
+  background-color: var(--background-color) !important;
+}
+
+.custom-header {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  padding: 2rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 2rem;
+  box-shadow: var(--box-shadow);
+  text-align: center;
+}
+
+.custom-header h1 {
+  font-weight: 700;
+  margin-bottom: 1rem;
+  font-size: 2.5rem;
+}
+
+.custom-header p {
+  font-weight: 300;
+  opacity: 0.9;
+  line-height: 1.6;
+}
+
+.custom-card {
+  background-color: var(--card-bg);
+  padding: 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  transition: var(--transition);
+  margin-bottom: 1.5rem;
+  border-left: 4px solid var(--primary-color);
+}
+
+.custom-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.stats-card {
+  background: white;
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  box-shadow: var(--box-shadow);
+  text-align: center;
+  transition: var(--transition);
+}
+
+.stats-card:hover {
+  transform: translateY(-5px);
+}
+
+.stats-card h3 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+
+.stats-card p {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.alert-success {
+  background-color: rgba(56, 176, 0, 0.1);
+  border-left: 4px solid var(--success-color);
+  padding: 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
+
 # Load or initialize sample data
 @st.cache_data
 def load_sample_data():
@@ -184,25 +291,6 @@ def delete_faq(faqs_df, index):
     faqs_df.to_csv("data/faqs.csv", index=False)
     return faqs_df
 
-# Set page config
-st.set_page_config(
-    page_title="AI FAQ Curator",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Custom CSS
-def load_css():
-    with open("assets/css/style.css") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-# Try to load CSS, create it if it doesn't exist
-try:
-    load_css()
-except:
-    st.warning("Custom CSS not found. Using default styling.")
-
 # Create a header with title and description
 st.markdown(
     """
@@ -236,7 +324,7 @@ st.sidebar.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-page = st.sidebar.radio("", ["🔍 FAQ Search", "➕ Add New FAQ", "📊 Analytics", "⚙️ Settings"])
+page = st.sidebar.radio("", ["🔍 FAQ Search", "➕ Add New FAQ", "📊 Analytics"])
 
 # Sidebar info
 st.sidebar.markdown("""
@@ -248,7 +336,7 @@ st.sidebar.markdown("""
         <li>Semantic search for relevant content</li>
         <li>Automatic FAQ generation</li>
         <li>Performance metrics</li>
-        <li>Cloud integration</li>
+        <li>Groq API integration</li>
     </ul>
 </div>
 """, unsafe_allow_html=True)
@@ -538,25 +626,6 @@ elif page == "📊 Analytics":
             unsafe_allow_html=True
         )
     
-    # Metrics over time (if we have data)
-    if len(st.session_state.metrics['precision']) > 1:
-        st.markdown("<h3>Metrics Over Time</h3>", unsafe_allow_html=True)
-        
-        # Create time series data for the plots
-        metrics_df = pd.DataFrame({
-            'Precision': st.session_state.metrics['precision'],
-            'Recall': st.session_state.metrics['recall'],
-            'F1 Score': st.session_state.metrics['f1_score'],
-            'Query': range(1, len(st.session_state.metrics['precision']) + 1)
-        })
-        
-        # Create plot
-        fig = px.line(metrics_df, x='Query', y=['Precision', 'Recall', 'F1 Score'],
-                     labels={'value': 'Score', 'Query': 'Query Number'},
-                     title='Quality Metrics Over Time')
-        fig.update_layout(legend_title_text='Metric')
-        st.plotly_chart(fig, use_container_width=True)
-    
     # Category distribution
     st.markdown("<h3>FAQ Category Distribution</h3>", unsafe_allow_html=True)
     category_counts = st.session_state.faqs_df['category'].value_counts().reset_index()
@@ -569,90 +638,11 @@ elif page == "📊 Analytics":
     fig.update_layout(uniformtext_minsize=12, uniformtext_mode='hide')
     st.plotly_chart(fig, use_container_width=True)
 
-elif page == "⚙️ Settings":
-    st.markdown("<h2>System Settings</h2>", unsafe_allow_html=True)
-    
-    # API settings
-    st.markdown("<h3>Groq API Configuration</h3>", unsafe_allow_html=True)
-    
-    # Show current API key status
-    if groq_api_key:
-        masked_key = groq_api_key[:4] + "*" * (len(groq_api_key) - 8) + groq_api_key[-4:]
-        st.success(f"Groq API key is configured: {masked_key}")
-    else:
-        st.error("Groq API key is not configured. Please add it to your .env file.")
-    
-    # Model selection
-    st.markdown("<h3>AI Model Settings</h3>", unsafe_allow_html=True)
-    selected_model = st.selectbox(
-        "Select Groq model",
-        ["llama3-8b-8192", "llama3-70b-8192", "gemma-7b-it"],
-        index=0
-    )
-    
-    # Export/Import
-    st.markdown("<h3>Data Management</h3>", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("Export FAQs (CSV)"):
-            csv_data = st.session_state.faqs_df.to_csv(index=False)
-            b64 = base64.b64encode(csv_data.encode()).decode()
-            href = f'<a href="data:file/csv;base64,{b64}" download="faqs_export.csv">Download CSV File</a>'
-            st.markdown(href, unsafe_allow_html=True)
-    
-    with col2:
-        uploaded_file = st.file_uploader("Import FAQs (CSV)", type="csv")
-        if uploaded_file is not None:
-            try:
-                imported_df = pd.read_csv(uploaded_file)
-                if 'question' in imported_df.columns and 'answer' in imported_df.columns:
-                    # Ensure all required columns exist
-                    for col in ['category', 'created_date', 'updated_date']:
-                        if col not in imported_df.columns:
-                            if col in ['created_date', 'updated_date']:
-                                imported_df[col] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                            else:
-                                imported_df[col] = "General"
-                    
-                    st.session_state.faqs_df = imported_df
-                    os.makedirs("data", exist_ok=True)
-                    imported_df.to_csv("data/faqs.csv", index=False)
-                    st.success(f"Successfully imported {len(imported_df)} FAQs!")
-                else:
-                    st.error("CSV file must contain 'question' and 'answer' columns.")
-            except Exception as e:
-                st.error(f"Error importing file: {str(e)}")
-    
-    # Reset system
-    st.markdown("<h3>System Reset</h3>", unsafe_allow_html=True)
-    
-    if st.button("🗑️ Reset All Data"):
-        confirm = st.checkbox("I understand this will delete all FAQs and metrics")
-        
-        if confirm:
-            # Reset to initial state
-            if os.path.exists("data/faqs.csv"):
-                os.remove("data/faqs.csv")
-            
-            st.session_state.faqs_df = load_sample_data()
-            st.session_state.search_results = []
-            st.session_state.edit_index = None
-            st.session_state.metrics = {
-                'precision': [],
-                'recall': [],
-                'f1_score': [],
-                'retrieval_time': []
-            }
-            
-            st.success("System reset complete!")
-
 # Footer
 st.markdown(
     """
     <div style="text-align: center; margin-top: 40px; padding: 20px; opacity: 0.7;">
-        <p>🧠 AI-Powered FAQ Curation System | Using Groq API</p>
+        <p>🧠 AI-Powered FAQ Curation System | Using Groq API | Made with ❤️</p>
     </div>
     """, 
     unsafe_allow_html=True
